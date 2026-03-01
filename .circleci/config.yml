@@ -70,19 +70,21 @@ jobs:
       - run:
           name: Run unit tests per component
           command: |
-            set -euo pipefail
             source .venv/bin/activate
             mkdir -p test-results/unit
-            for d in components/*; do
-              if [ -d "$d/tests" ]; then
-                name="$(basename "$d")"
-                echo "=== Running unit tests for $name ==="
-                pytest "$d/tests" \
-                  -m "not local_credentials" -v \
-                  --junitxml "test-results/unit/${name}.xml" \
-                  --cov="$d/src" --cov-report=term --cov-report=html
-              fi
-            done
+            pytest components \
+              -m "not local_credentials" -v \
+              --junitxml test-results/unit/results.xml \
+              --cov=components \
+              --cov-report=term \
+              --cov-report=xml:coverage.xml \
+              --cov-report=html:htmlcov
+      - persist_to_workspace:
+          root: .
+          paths:
+            - test-results/unit
+            - coverage.xml
+            - htmlcov
       - store_test_results:
           path: test-results/unit
       - store_artifacts:
@@ -90,8 +92,9 @@ jobs:
       - store_artifacts:
           path: htmlcov
           destination: coverage-report
+      - store_artifacts:
+          path: coverage.xml
 
-  
   integration_tests:
     docker:
       - image: cimg/python:3.13
@@ -108,6 +111,10 @@ jobs:
               -m "not local_credentials" -v \
               --junitxml test-results/integration/results.xml \
               --no-cov
+      - persist_to_workspace:
+          root: .
+          paths:
+            - test-results/integration
       - store_test_results:
           path: test-results/integration
       - store_artifacts:
@@ -129,11 +136,71 @@ jobs:
               -m "not local_credentials" -v \
               --junitxml test-results/e2e/results.xml \
               --no-cov
+      - persist_to_workspace:
+          root: .
+          paths:
+            - test-results/e2e
       - store_test_results:
           path: test-results/e2e
       - store_artifacts:
           path: test-results/e2e
 
+  report_summary:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: "Install xmllint"
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y libxml2-utils
+      - run:
+          name: "Summarize Unit Test Results"
+          command: |
+            echo "--- Unit Test Summary ---"
+            if [ -f test-results/unit/results.xml ]; then
+              echo "Unit test results file found."
+              if command -v xmllint > /dev/null; then
+                tests=$(xmllint --xpath "string(//testsuite/@tests)" test-results/unit/results.xml 2>/dev/null || echo "N/A")
+                failures=$(xmllint --xpath "string(//testsuite/@failures)" test-results/unit/results.xml 2>/dev/null || echo "N/A")
+                echo "Tests: $tests, Failures: $failures"
+              fi
+            else
+              echo "Unit test results file (test-results/unit/results.xml) not found."
+            fi
+      - run:
+          name: "Summarize Integration Test Results"
+          command: |
+            echo "--- Integration Test Summary ---"
+            if [ -f test-results/integration/results.xml ]; then
+              echo "Integration test results file found."
+            else
+              echo "Integration test results file not found."
+            fi
+      - run:
+          name: "Summarize E2E Test Results"
+          command: |
+            echo "--- E2E Test Summary ---"
+            if [ -f test-results/e2e/results.xml ]; then
+              echo "E2E test results file found."
+            else
+              echo "E2E test results file not found."
+            fi
+      - run:
+          name: "Display Coverage Info"
+          command: |
+            echo "--- Coverage Summary ---"
+            if [ -f coverage.xml ]; then
+               echo "Coverage XML found. Check artifacts for details."
+               if command -v xmllint > /dev/null; then
+                 coverage_rate=$(xmllint --xpath "string(//coverage/@line-rate)" coverage.xml 2>/dev/null || echo "N/A")
+                 echo "Line Coverage Rate: $coverage_rate"
+               fi
+            else
+               echo "Coverage XML not found."
+            fi
 
 workflows:
   lint_types_tests:
@@ -154,3 +221,8 @@ workflows:
       - e2e_tests:
           requires:
             - integration_tests
+      - report_summary:
+          requires:
+            - unit_tests
+            - integration_tests
+            - e2e_tests
