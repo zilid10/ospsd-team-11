@@ -8,6 +8,7 @@ dependencies = [
     "calendar-client-api",
     "google-calendar-client-impl",
     "fastapi>=0.135.1",
+    "fastapi-sessions>=0.3.2",
     "uvicorn>=0.42.0",
 ]
 

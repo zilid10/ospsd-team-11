@@ -28,17 +28,23 @@ def health() -> StatusResponse:
 
 
 @app.get("/auth/login")
-async def login() -> dict[str, str]:
+async def login() -> StatusResponse:
     """Start the OAuth login flow."""
-    return {"message": "OAuth login not implemented yet"}
+    return StatusResponse(status="login initiated")
+
+
+@app.post("/auth/logout")
+async def logout() -> StatusResponse:
+    """Log the user out by clearing their session."""
+    return StatusResponse(status="logged out")
 
 
 @app.get("/auth/callback")
-def callback(code: Annotated[str | None, Query()] = None) -> dict[str, str]:
+def callback(code: Annotated[str | None, Query()] = None) -> StatusResponse:
     """Handle the OAuth callback from the provider."""
     if code is None:
-        return {"message": "Missing authorization code"}
-    return {"message": "OAuth callback not implemented yet"}
+        return StatusResponse(status="Missing authorization code")
+    return StatusResponse(status="OAuth callback not implemented yet")
 
 
 @app.get("/events")
