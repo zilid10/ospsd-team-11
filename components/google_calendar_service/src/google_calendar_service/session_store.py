@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -26,20 +25,14 @@ from fastapi_sessions.frontends.implementations import (  # type: ignore[import-
 from fastapi_sessions.session_verifier import SessionVerifier  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict
 
+from google_calendar_service.settings import get_settings
+
 
 def _to_utc(value: datetime) -> datetime:
     """Convert datetime to UTC timezone."""
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
-
-
-def _env_bool(name: str, *, default: bool) -> bool:
-    """Read a boolean environment variable."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class OAuthStateRecord(BaseModel):
@@ -168,13 +161,14 @@ def generate_pkce_pair(verifier_bytes: int = 64) -> tuple[str, str]:
     return code_verifier, code_challenge
 
 
+service_settings = get_settings()
 cookie = SessionCookie(
-    cookie_name=os.getenv("GOOGLE_CALENDAR_SESSION_COOKIE_NAME", "google_calendar_session_id"),
-    identifier="google_calendar_service_verifier",
+    cookie_name=service_settings.session.cookie_name,
+    identifier=service_settings.session.identifier,
     auto_error=True,
-    secret_key=os.getenv("GOOGLE_CALENDAR_SESSION_SECRET", "dev-only"),
+    secret_key=service_settings.session.secret,
     cookie_params=CookieParameters(
-        secure=_env_bool("GOOGLE_CALENDAR_SESSION_COOKIE_SECURE", default=False),
+        secure=service_settings.session.cookie_secure,
         httponly=True,
     ),
 )
