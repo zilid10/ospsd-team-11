@@ -232,6 +232,17 @@ def list_events(max_results: Annotated[int, Query(ge=1)] = 10) -> EventsEnvelope
     return EventsEnvelope(events=[to_event_response(event) for event in events])
 
 
+@app.get("/events/between")
+def list_events_between(
+    start: Annotated[datetime, Query()],
+    end: Annotated[datetime, Query()],
+) -> EventsEnvelope:
+    """List calendar events between two datetimes."""
+    client = get_client()
+    events = client.list_events_between(start=start, end=end)
+    return EventsEnvelope(events=[to_event_response(event) for event in events])
+
+
 @app.get("/events/{event_id}")
 def get_event(event_id: str) -> EventEnvelope:
     """Get a single calendar event by ID."""
