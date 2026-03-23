@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 import urllib.parse
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
-from uuid import UUID
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 import google_calendar_client_impl  # noqa: F401 Registers the concrete client via Dependency Injection
 import httpx
 from calendar_client_api import get_client
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 
 from google_calendar_service.models import (
@@ -39,18 +41,6 @@ app = FastAPI(
     title="Google Calendar Service",
     version="0.1.0",
 )
-
-
-def _extract_session_id_from_request(request: Request) -> UUID | None:
-    """Best-effort extraction of session UUID from cookie."""
-    session_cookie_name = get_settings().session.cookie_name
-    cookie_value = request.cookies.get(session_cookie_name)
-    if not cookie_value:
-        return None
-    try:
-        return UUID(cookie_value)
-    except ValueError:
-        return None
 
 
 def _build_google_authorization_url(*, state: str, code_challenge: str) -> str:
@@ -155,9 +145,8 @@ def health() -> StatusResponse:
 
 
 @app.get("/auth/login")
-async def login(request: Request) -> RedirectResponse:
+async def login(previous_session_id: Annotated[UUID, Depends(cookie)]) -> RedirectResponse:
     """Start OAuth login flow and redirect to Google consent screen."""
-    previous_session_id = _extract_session_id_from_request(request)
     if previous_session_id is not None:
         await delete_session(session_id=previous_session_id)
 
@@ -179,9 +168,8 @@ async def login(request: Request) -> RedirectResponse:
 
 
 @app.post("/auth/logout")
-async def logout(request: Request, response: Response) -> StatusResponse:
+async def logout(session_id: Annotated[UUID, Depends(cookie)], response: Response) -> StatusResponse:
     """Log out by clearing OAuth token/session state and removing session cookie."""
-    session_id = _extract_session_id_from_request(request)
     if session_id is not None:
         await clear_oauth_tokens_in_session(session_id=session_id)
         await delete_session(session_id=session_id)

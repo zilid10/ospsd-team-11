@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -26,6 +27,8 @@ from fastapi_sessions.session_verifier import SessionVerifier  # type: ignore[im
 from pydantic import BaseModel, ConfigDict
 
 from google_calendar_service.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def _to_utc(value: datetime) -> datetime:
@@ -169,7 +172,7 @@ cookie = SessionCookie(
     secret_key=service_settings.session.secret,
     cookie_params=CookieParameters(
         secure=service_settings.session.cookie_secure,
-        httponly=True,
+        httponly=service_settings.session.cookie_secure,
     ),
 )
 
@@ -241,7 +244,11 @@ async def read_session(*, session_id: UUID) -> SessionData | None:
 
 async def delete_session(*, session_id: UUID) -> None:
     """Delete session by id."""
-    await backend.delete(session_id)
+    try:
+        await backend.delete(session_id)
+    except KeyError:
+        msg = f"error deleting session {session_id}"
+        logger.info(msg)
 
 
 async def set_oauth_handshake_in_session(*, session_id: UUID, state: str, code_verifier: str, ttl_seconds: int) -> SessionData:

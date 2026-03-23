@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from typing import Final
 from urllib.parse import urlparse
 
-DEFAULT_OAUTH_REDIRECT_URI: Final[str] = "http://localhost:8080/auth/callback"
+from google_calendar_client_impl.client_impl import load_env
+
+DEFAULT_OAUTH_REDIRECT_URI: Final[str] = "http://localhost:8000/auth/callback"
 DEFAULT_OAUTH_SCOPE: Final[str] = "https://www.googleapis.com/auth/calendar"
 DEFAULT_OAUTH_AUTH_URL: Final[str] = "https://accounts.google.com/o/oauth2/v2/auth"
 DEFAULT_OAUTH_TOKEN_URL: Final[str] = "https://oauth2.googleapis.com/token"  # noqa: S105 - URL, not a secret
@@ -134,6 +136,7 @@ def _validate_token_endpoint(token_url: str, allowed_hosts: tuple[str, ...]) -> 
 
 def get_settings() -> ServiceSettings:
     """Load service settings from environment variables."""
+    load_env()
     oauth = OAuthSettings(
         client_id=os.getenv("GOOGLE_CALENDAR_CLIENT_ID"),
         client_secret=os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET"),

@@ -21,19 +21,19 @@ theme:
     - search.highlight
 
 nav:
-  - 'Overview': 'index.md'
-  - 'Architecture': 'component.md'
-  - 'API Reference':
-    - 'Calendar Event API': 'api/event_api.md'
-    - 'Calendar Client API': 'api/calendar_client_api.md'
-    - 'Google Calendar Client Implementation': 'api/google_calendar_client_impl.md'
-    - 'Google Calendar Events Implementation': 'api/google_calendar_event_impl.md'
+  - "Overview": "index.md"
+  - "Architecture": "component.md"
+  - "API Reference":
+      - "Calendar Event API": "api/event_api.md"
+      - "Calendar Client API": "api/calendar_client_api.md"
+      - "Google Calendar Client Implementation": "api/google_calendar_client_impl.md"
+      - "Google Calendar Events Implementation": "api/google_calendar_event_impl.md"
 
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
-  - pymdownx.inlinehilite  # Inline code highlighting
+  - pymdownx.inlinehilite # Inline code highlighting
   - pymdownx.tabbed: # tabbed contents
       alternate_style: true
   - admonition # Warning/Note boxes
@@ -48,6 +48,7 @@ plugins:
           paths:
             - components/calendar_client_api/src
             - components/google_calendar_client_impl/src
+            - components/google_calendar_service/src
           options:
             show_signature_annotations: true
             members_order: source
