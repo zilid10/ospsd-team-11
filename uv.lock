@@ -7,6 +7,7 @@ members = [
     "calendar-client-api",
     "google-calendar-client-impl",
     "google-calendar-service",
+    "google-calendar-service-adapter",
     "google-calendar-service-client",
     "ospsd-team-11",
 ]
@@ -490,6 +491,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "google-calendar-service-adapter"
+version = "0.1.0"
+source = { editable = "components/google_calendar_service_adapter" }
+dependencies = [
+    { name = "calendar-client-api" },
+    { name = "google-calendar-service-client" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "calendar-client-api", editable = "components/calendar_client_api" },
+    { name = "google-calendar-service-client", editable = "components/google_calendar_service_api_client" },
+]
+
+[[package]]
 name = "google-calendar-service-client"
 version = "0.1.0"
 source = { editable = "components/google_calendar_service_api_client" }
@@ -899,6 +915,7 @@ dependencies = [
     { name = "google-auth-oauthlib" },
     { name = "google-calendar-client-impl" },
     { name = "google-calendar-service" },
+    { name = "google-calendar-service-adapter" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -925,6 +942,7 @@ requires-dist = [
     { name = "google-auth-oauthlib", specifier = ">=1.3.0" },
     { name = "google-calendar-client-impl", editable = "components/google_calendar_client_impl" },
     { name = "google-calendar-service", editable = "components/google_calendar_service" },
+    { name = "google-calendar-service-adapter", editable = "components/google_calendar_service_adapter" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6.1" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.7.3" },
