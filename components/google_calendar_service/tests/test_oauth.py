@@ -18,6 +18,7 @@ from google_calendar_service.session_store import cookie as session_cookie
 
 HTTP_OK = 200
 HTTP_BAD_REQUEST = 400
+HTTP_FORBIDDEN = 403
 HTTP_FOUND = 302
 HTTP_BAD_GATEWAY = 502
 OAUTH_STATE_TTL_SECONDS = 900
@@ -257,7 +258,7 @@ class TestAuthEndpoints:
             observed["set_code_verifier"] = code_verifier
             observed["set_ttl"] = ttl_seconds
 
-        monkeypatch.setattr(main_module, "_extract_session_id_from_request", lambda _request: previous_session_id)
+        app.dependency_overrides[session_cookie] = lambda: previous_session_id
         monkeypatch.setattr(main_module, "delete_session", fake_delete_session)
         monkeypatch.setattr(main_module, "create_session", fake_create_session)
         monkeypatch.setattr(main_module, "generate_oauth_state", lambda: "state-1")
@@ -274,7 +275,10 @@ class TestAuthEndpoints:
             lambda *, state, code_challenge: f"https://example.com/oauth?state={state}&cc={code_challenge}",
         )
 
-        response = client.get("/auth/login", follow_redirects=False)
+        try:
+            response = client.get("/auth/login", follow_redirects=False)
+        finally:
+            app.dependency_overrides.pop(session_cookie, None)
 
         assert response.status_code == HTTP_FOUND
         assert response.headers["location"] == "https://example.com/oauth?state=state-1&cc=challenge-1"
@@ -283,14 +287,12 @@ class TestAuthEndpoints:
         assert observed["set_state"] == "state-1"
         assert observed["set_code_verifier"] == "verifier-1"
 
-    def test_logout_without_session_still_returns_logged_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Return logged out when no session cookie is present."""
-        monkeypatch.setattr(main_module, "_extract_session_id_from_request", lambda _request: None)
-
+    def test_logout_without_session_returns_403(self) -> None:
+        """Return 403 when no session cookie is present."""
+        client.cookies.clear()
         response = client.post("/auth/logout")
 
-        assert response.status_code == HTTP_OK
-        assert response.json() == {"status": "logged out"}
+        assert response.status_code == HTTP_FORBIDDEN
 
     def test_callback_error_branches(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Return 400 for provider error, missing code, missing state, and invalid handshake."""

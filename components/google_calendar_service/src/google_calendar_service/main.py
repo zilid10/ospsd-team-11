@@ -5,10 +5,8 @@ from __future__ import annotations
 import json
 import urllib.parse
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated
-
-if TYPE_CHECKING:
-    from uuid import UUID
+from typing import Annotated
+from uuid import UUID  # noqa: TC003 - required at runtime for FastAPI/Pydantic annotation resolution
 
 import google_calendar_client_impl  # noqa: F401 Registers the concrete client via Dependency Injection
 import httpx
