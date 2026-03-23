@@ -46,6 +46,7 @@ members = [
 [tool.ruff]
 line-length = 130
 target-version = "py313"
+exclude = ["components/google_calendar_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -80,6 +81,7 @@ mypy_path = [
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
+exclude = ["components/google_calendar_service_api_client"]
 
 # Allow untyped imports for specific modules
 #[[tool.mypy.overrides]]
