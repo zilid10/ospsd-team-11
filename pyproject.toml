@@ -18,6 +18,7 @@ dependencies = [
 calendar-client-api = { workspace = true }
 google-calendar-client-impl = { workspace = true }
 google-calendar-service = { workspace = true }
+google-calendar-service-client = { workspace = true }
 
 
 [project.optional-dependencies]
@@ -39,6 +40,7 @@ members = [
     "components/calendar_client_api",
     "components/google_calendar_client_impl",
     "components/google_calendar_service",
+    "components/google_calendar_service_api_client",
 ]
 
 [tool.ruff]
