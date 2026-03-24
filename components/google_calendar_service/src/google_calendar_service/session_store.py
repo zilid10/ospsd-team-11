@@ -164,15 +164,15 @@ def generate_pkce_pair(verifier_bytes: int = 64) -> tuple[str, str]:
     return code_verifier, code_challenge
 
 
-service_settings = get_settings()
+_service_settings = get_settings()
 cookie = SessionCookie(
-    cookie_name=service_settings.session.cookie_name,
-    identifier=service_settings.session.identifier,
+    cookie_name=_service_settings.session.cookie_name,
+    identifier=_service_settings.session.identifier,
     auto_error=True,
-    secret_key=service_settings.session.secret,
+    secret_key=_service_settings.session.secret,
     cookie_params=CookieParameters(
-        secure=service_settings.session.cookie_secure,
-        httponly=service_settings.session.cookie_secure,
+        secure=_service_settings.session.cookie_secure,
+        httponly=_service_settings.session.cookie_secure,
     ),
 )
 

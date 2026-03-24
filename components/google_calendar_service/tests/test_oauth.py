@@ -26,6 +26,12 @@ OAUTH_STATE_TTL_SECONDS = 900
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def clear_settings_cache() -> None:
+    """Clear cached settings so env monkeypatching is applied per test."""
+    settings_module.get_settings.cache_clear()
+
+
 class TestAuthHelperFunctions:
     """Tests for centralized settings and OAuth helper behavior."""
 
