@@ -192,8 +192,8 @@ class TestListEventsEndpoint:
                 {
                     "id": "test_123",
                     "title": "Networking Event",
-                    "start_time": "2026-03-18T10:00:00+00:00",
-                    "end_time": "2026-03-18T11:00:00+00:00",
+                    "start_time": "2026-03-18T10:00:00Z",
+                    "end_time": "2026-03-18T11:00:00Z",
                     "description": "NYU event",
                     "location": "2 MetroTech",
                     "attendees": [
@@ -222,8 +222,8 @@ class TestGetEventEndpoint:
             "event": {
                 "id": "test_123",
                 "title": "Networking Event",
-                "start_time": "2026-03-18T10:00:00+00:00",
-                "end_time": "2026-03-18T11:00:00+00:00",
+                "start_time": "2026-03-18T10:00:00Z",
+                "end_time": "2026-03-18T11:00:00Z",
                 "description": "NYU event",
                 "location": "2 MetroTech",
                 "attendees": [
@@ -267,8 +267,8 @@ class TestCreateEventEndpoint:
             "event": {
                 "id": "evt_created",
                 "title": "Java Exam",
-                "start_time": "2026-03-20T14:00:00+00:00",
-                "end_time": "2026-03-20T15:00:00+00:00",
+                "start_time": "2026-03-20T14:00:00Z",
+                "end_time": "2026-03-20T15:00:00Z",
                 "description": "Java Midterm",
                 "location": "2 MetroTech",
                 "attendees": [
@@ -302,8 +302,8 @@ class TestUpdateEventEndpoint:
             "event": {
                 "id": "test_123",
                 "title": "Updated Java Midterm",
-                "start_time": "2026-03-18T10:00:00+00:00",
-                "end_time": "2026-03-18T11:00:00+00:00",
+                "start_time": "2026-03-18T10:00:00Z",
+                "end_time": "2026-03-18T11:00:00Z",
                 "description": None,
                 "location": "2 MetroTech Room",
                 "attendees": [

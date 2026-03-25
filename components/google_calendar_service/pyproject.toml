@@ -5,10 +5,23 @@ description = "FastAPI service for Google Calendar client"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "calendar-client-api",
+    "google-calendar-client-impl",
     "fastapi>=0.135.1",
+    "fastapi-sessions>=0.3.2",
     "uvicorn>=0.42.0",
 ]
+
+[tool.uv.sources]
+calendar-client-api = { workspace = true }
+google-calendar-client-impl = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/google_calendar_service"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/google_calendar_service/py.typed" = "google_calendar_service/py.typed"

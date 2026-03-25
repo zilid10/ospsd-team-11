@@ -25,6 +25,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.circleci]
 _NOW = datetime(2026, 6, 1, 10, 0, tzinfo=UTC)
 _END = _NOW + timedelta(hours=1)
 
+
 def _fake_event_payload(
     *,
     event_id: str = "ci_evt_001",
@@ -91,9 +92,7 @@ def test_registry_wiring_with_mocked_auth() -> None:
     assert isinstance(client, CalendarClient)
 
 
-def test_create_event_serializes_and_parses_response(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_create_event_serializes_and_parses_response(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """create_event() serializes the request and parses the API response into an Event."""
     payload = _fake_event_payload(event_id="ci_create_001", title="CI Create Event")
     mock_service.events.return_value.insert.return_value.execute.return_value = payload
@@ -132,9 +131,7 @@ def test_create_event_serializes_and_parses_response(
     assert event.end_time == _END
 
 
-def test_get_event_returns_parsed_event(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_get_event_returns_parsed_event(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """get_event() fetches by ID and returns a fully parsed Event."""
     payload = _fake_event_payload(event_id="ci_get_001", title="CI Get Event")
     mock_service.events.return_value.get.return_value.execute.return_value = payload
@@ -149,9 +146,7 @@ def test_get_event_returns_parsed_event(
     assert event.title == "CI Get Event"
 
 
-def test_list_events_returns_all_items(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_list_events_returns_all_items(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """list_events_between() returns all items from the API list payload."""
     start = datetime(2026, 6, 1, 0, 0, tzinfo=UTC)
     end = datetime(2026, 6, 2, 0, 0, tzinfo=UTC)
@@ -161,9 +156,7 @@ def test_list_events_returns_all_items(
         _fake_event_payload(event_id="ci_list_002", title="Event B"),
         _fake_event_payload(event_id="ci_list_003", title="Event C"),
     ]
-    mock_service.events.return_value.list.return_value.execute.return_value = (
-        _fake_list_payload(payloads)
-    )
+    mock_service.events.return_value.list.return_value.execute.return_value = _fake_list_payload(payloads)
 
     events = list(ci_client.list_events_between(start, end))
 
@@ -172,9 +165,7 @@ def test_list_events_returns_all_items(
     assert [e.title for e in events] == ["Event A", "Event B", "Event C"]
 
 
-def test_update_event_sends_patch_and_returns_updated_event(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_update_event_sends_patch_and_returns_updated_event(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """update_event() sends only the changed fields and parses the updated response."""
     updated_payload = _fake_event_payload(
         event_id="ci_upd_001",
@@ -198,9 +189,7 @@ def test_update_event_sends_patch_and_returns_updated_event(
     assert event.location == "New Room"
 
 
-def test_delete_event_calls_api(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_delete_event_calls_api(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """delete_event() calls the Google Calendar delete API with the correct identifiers."""
     ci_client.delete_event("ci_del_001")
 
@@ -211,9 +200,7 @@ def test_delete_event_calls_api(
     mock_service.events.return_value.delete.return_value.execute.assert_called_once_with()
 
 
-def test_full_crud_lifecycle_ci(
-    ci_client: GoogleCalendarClient, mock_service: MagicMock
-) -> None:
+def test_full_crud_lifecycle_ci(ci_client: GoogleCalendarClient, mock_service: MagicMock) -> None:
     """Full CRUD workflow against a mocked service: create -> get -> list -> update -> delete."""
     base_payload = _fake_event_payload(event_id="ci_crud_001", title="CI CRUD Event")
 
@@ -237,18 +224,14 @@ def test_full_crud_lifecycle_ci(
     assert fetched.title == created.title
 
     # List
-    mock_service.events.return_value.list.return_value.execute.return_value = (
-        _fake_list_payload([base_payload])
-    )
+    mock_service.events.return_value.list.return_value.execute.return_value = _fake_list_payload([base_payload])
     start = _NOW - timedelta(minutes=5)
     end = _END + timedelta(minutes=5)
     events = list(ci_client.list_events_between(start, end))
     assert any(e.id == "ci_crud_001" for e in events)
 
     # Update
-    updated_payload = _fake_event_payload(
-        event_id="ci_crud_001", title="CI CRUD Updated", extras={"description": "Updated"}
-    )
+    updated_payload = _fake_event_payload(event_id="ci_crud_001", title="CI CRUD Updated", extras={"description": "Updated"})
     mock_service.events.return_value.patch.return_value.execute.return_value = updated_payload
     patch = EventUpdate(title="CI CRUD Updated", description="Updated")
     updated = ci_client.update_event(created.id, patch)
