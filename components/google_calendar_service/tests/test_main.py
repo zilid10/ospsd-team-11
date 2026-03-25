@@ -1,6 +1,6 @@
 """Tests for the Google Calendar FastAPI service."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -14,6 +14,14 @@ HTTP_OK = 200
 DEFAULT_MAX_RESULTS = 10
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def override_get_client_dependency() -> Iterator[None]:
+    """Override the FastAPI get_client dependency with the fake client for these tests."""
+    app.dependency_overrides[main_module.get_client] = fake_get_client
+    yield
+    app.dependency_overrides.pop(main_module.get_client, None)
 
 
 @dataclass(frozen=True)
@@ -182,8 +190,6 @@ class TestListEventsEndpoint:
 
     def test_returns_serialized_events(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Return serialized event data from the client."""
-        monkeypatch.setattr(main_module, "get_client", fake_get_client)
-
         response = client.get("/events")
 
         assert response.status_code == HTTP_OK
@@ -213,8 +219,6 @@ class TestGetEventEndpoint:
 
     def test_returns_serialized_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Return one serialized event by ID."""
-        monkeypatch.setattr(main_module, "get_client", fake_get_client)
-
         response = client.get("/events/test_123")
 
         assert response.status_code == HTTP_OK
@@ -242,8 +246,6 @@ class TestCreateEventEndpoint:
 
     def test_creates_and_returns_serialized_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Create an event and return serialized event data."""
-        monkeypatch.setattr(main_module, "get_client", fake_get_client)
-
         response = client.post(
             "/events",
             json={
@@ -287,8 +289,6 @@ class TestUpdateEventEndpoint:
 
     def test_updates_and_returns_serialized_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Update an event and return serialized event data."""
-        monkeypatch.setattr(main_module, "get_client", fake_get_client)
-
         response = client.patch(
             "/events/test_123",
             json={
@@ -322,8 +322,6 @@ class TestDeleteEventEndpoint:
 
     def test_deletes_event(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Delete an event and return confirmation."""
-        monkeypatch.setattr(main_module, "get_client", fake_get_client)
-
         response = client.delete("/events/test_123")
 
         assert response.status_code == HTTP_OK

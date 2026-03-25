@@ -1,15 +1,17 @@
 """Session and OAuth utilities for the Google Calendar service.
 
-Uses fastapi-sessions for in-memory session storage. OAuth handshake data
-and tokens are stored within the session. Defines cookie, backend, and
-verifier used by FastAPI routes.
+This module centralizes:
+- Session cookie/frontend configuration
+- In-memory session backend and verifier
+- OAuth state + PKCE handshake helpers
+- OAuth token helpers stored in session data
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import os
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -17,13 +19,27 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from fastapi_sessions.backends.implementations import InMemoryBackend  # type: ignore[import-untyped]
-from fastapi_sessions.frontends.implementations import CookieParameters, SessionCookie  # type: ignore[import-untyped]
+from fastapi_sessions.frontends.implementations import (  # type: ignore[import-untyped]
+    CookieParameters,
+    SessionCookie,
+)
 from fastapi_sessions.session_verifier import SessionVerifier  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict
 
+from google_calendar_service.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _to_utc(value: datetime) -> datetime:
+    """Convert datetime to UTC timezone."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
 
 class OAuthStateRecord(BaseModel):
-    """Temporary OAuth handshake payload."""
+    """OAuth handshake record loaded from session."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -33,7 +49,7 @@ class OAuthStateRecord(BaseModel):
 
 
 class OAuthTokenRecord(BaseModel):
-    """OAuth token data stored in the current session."""
+    """OAuth token record loaded from session."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -56,8 +72,8 @@ class SessionData(BaseModel):
     def with_oauth_handshake(self, *, state: str, code_verifier: str, ttl_seconds: int) -> SessionData:
         """Return a copy with OAuth handshake values set."""
         if ttl_seconds <= 0:
-            err_msg = f"invalid ttl_seconds: {ttl_seconds} (must be > 0)"
-            raise ValueError(err_msg)
+            msg = f"invalid ttl_seconds: {ttl_seconds} (must be > 0)"
+            raise ValueError(msg)
 
         now = datetime.now(UTC)
         return self.model_copy(
@@ -69,14 +85,14 @@ class SessionData(BaseModel):
         )
 
     def get_oauth_handshake(self, *, state: str, now: datetime | None = None) -> OAuthStateRecord | None:
-        """Get handshake data if valid; returns record or None."""
-        current_time = now or datetime.now(UTC)
+        """Return handshake record if state matches and not expired."""
+        current = now or datetime.now(UTC)
 
         if self.oauth_state is None or self.oauth_code_verifier is None or self.oauth_state_expires_at is None:
             return None
         if state != self.oauth_state:
             return None
-        if self.oauth_state_expires_at <= current_time:
+        if self.oauth_state_expires_at <= current:
             return None
 
         return OAuthStateRecord(
@@ -86,31 +102,36 @@ class SessionData(BaseModel):
         )
 
     def clear_oauth_handshake(self) -> SessionData:
-        """Return a copy with OAuth handshake values cleared."""
+        """Return a copy with OAuth handshake fields cleared."""
         return self.model_copy(
             update={
                 "oauth_state": None,
                 "oauth_code_verifier": None,
                 "oauth_state_expires_at": None,
-            },
+            }
         )
 
-    def with_oauth_tokens(self, *, access_token: str, refresh_token: str | None = None, expires_at: datetime) -> SessionData:
-        """Return a copy with OAuth token values set/updated."""
-        expires_at_utc = _to_utc(expires_at)
-        persisted_refresh = refresh_token if refresh_token is not None else self.oauth_refresh_token
+    def with_oauth_tokens(self, *, access_token: str, expires_at: datetime, refresh_token: str | None = None) -> SessionData:
+        """Return a copy with OAuth token fields set/updated.
 
-        return self.clear_oauth_handshake().model_copy(
+        If `refresh_token` is omitted, any existing refresh token is preserved.
+        """
+        persisted_refresh = refresh_token if refresh_token is not None else self.oauth_refresh_token
+        return self.model_copy(
             update={
                 "oauth_access_token": access_token,
-                "oauth_token_expires_at": expires_at_utc,
                 "oauth_refresh_token": persisted_refresh,
-            },
+                "oauth_token_expires_at": _to_utc(expires_at),
+            }
         )
 
-    def get_oauth_tokens(self) -> OAuthTokenRecord | None:
-        """Return OAuth token record from session fields, if complete."""
+    def get_oauth_tokens(self, *, now: datetime | None = None) -> OAuthTokenRecord | None:
+        """Return token record if present and not expired."""
+        current = now or datetime.now(UTC)
+
         if self.oauth_access_token is None or self.oauth_token_expires_at is None:
+            return None
+        if self.oauth_token_expires_at <= current:
             return None
 
         return OAuthTokenRecord(
@@ -126,43 +147,50 @@ class SessionData(BaseModel):
                 "oauth_access_token": None,
                 "oauth_refresh_token": None,
                 "oauth_token_expires_at": None,
-            },
+            }
         )
 
 
-def _to_utc(value: datetime) -> datetime:
-    """Convert datetime to UTC timezone."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
-
-
 def generate_oauth_state(num_bytes: int = 32) -> str:
-    """Generate a cryptographically-random OAuth state."""
+    """Generate a cryptographically random OAuth state token."""
     return secrets.token_urlsafe(num_bytes)
 
 
 def generate_pkce_pair(verifier_bytes: int = 64) -> tuple[str, str]:
-    """Generate PKCE (code_verifier, code_challenge) using S256."""
+    """Generate PKCE `(code_verifier, code_challenge)` pair using S256."""
     code_verifier = secrets.token_urlsafe(verifier_bytes)
     digest = hashlib.sha256(code_verifier.encode("utf-8")).digest()
     code_challenge = base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
     return code_verifier, code_challenge
 
 
+_service_settings = get_settings()
 cookie = SessionCookie(
-    cookie_name="google_calendar_session_id",
-    identifier="google_calendar_service_verifier",
+    cookie_name=_service_settings.session.cookie_name,
+    identifier=_service_settings.session.identifier,
     auto_error=True,
-    secret_key=os.getenv("GOOGLE_CALENDAR_SESSION_SECRET", "dev-only-change-me"),
-    cookie_params=CookieParameters(),
+    secret_key=_service_settings.session.secret,
+    cookie_params=CookieParameters(
+        secure=_service_settings.session.cookie_secure,
+        httponly=_service_settings.session.cookie_secure,
+    ),
+)
+optional_cookie = SessionCookie(
+    cookie_name=_service_settings.session.cookie_name,
+    identifier=_service_settings.session.identifier,
+    auto_error=False,
+    secret_key=_service_settings.session.secret,
+    cookie_params=CookieParameters(
+        secure=_service_settings.session.cookie_secure,
+        httponly=_service_settings.session.cookie_secure,
+    ),
 )
 
 backend = InMemoryBackend[UUID, SessionData]()
 
 
 class BasicSessionVerifier(SessionVerifier[UUID, SessionData]):  # type: ignore[misc]
-    """Session verifier used by fastapi dependency injection."""
+    """Session verifier used by FastAPI dependency injection."""
 
     def __init__(
         self,
@@ -172,7 +200,7 @@ class BasicSessionVerifier(SessionVerifier[UUID, SessionData]):  # type: ignore[
         backend: InMemoryBackend[UUID, SessionData],
         auth_http_exception: HTTPException,
     ) -> None:
-        """Initialize the verifier."""
+        """Initialize verifier."""
         self._identifier = identifier
         self._auto_error = auto_error
         self._backend = backend
@@ -180,80 +208,78 @@ class BasicSessionVerifier(SessionVerifier[UUID, SessionData]):  # type: ignore[
 
     @property
     def identifier(self) -> str:
-        """Return the unique identifier for this verifier."""
+        """Return verifier identifier."""
         return self._identifier
 
     @property
     def backend(self) -> InMemoryBackend[UUID, SessionData]:
-        """Return the session backend instance."""
+        """Return backend instance."""
         return self._backend
 
     @property
     def auto_error(self) -> bool:
-        """Return whether to raise HTTPException on auth failure."""
+        """Return whether auth errors raise automatically."""
         return self._auto_error
 
     @property
     def auth_http_exception(self) -> HTTPException:
-        """Return the HTTPException to raise for auth errors."""
+        """Return auth HTTP exception."""
         return self._auth_http_exception
 
     def verify_session(self, model: SessionData) -> bool:
-        """If the session exists, it is valid."""
-        assert model
-        return True
+        """Return whether the session payload exists."""
+        return model is not None
 
 
 verifier = BasicSessionVerifier(
-    identifier="google_calendar_service_verifier",
+    identifier=_service_settings.session.identifier,
     auto_error=True,
     backend=backend,
     auth_http_exception=HTTPException(status_code=403, detail="invalid session"),
 )
 
 
-# async helpers for routes/services
 async def create_session() -> UUID:
-    """Create a new session and persist it in session backend."""
+    """Create and persist a new session."""
     session_id = uuid4()
     await backend.create(session_id, SessionData())
     return session_id
 
 
 async def read_session(*, session_id: UUID) -> SessionData | None:
-    """Read session payload by session id."""
+    """Read session by id."""
     return cast("SessionData | None", await backend.read(session_id))
 
 
 async def delete_session(*, session_id: UUID) -> None:
-    """Delete session by session id."""
-    await backend.delete(session_id)
+    """Delete session by id."""
+    try:
+        await backend.delete(session_id)
+    except KeyError:
+        msg = f"error deleting session {session_id}"
+        logger.info(msg)
 
 
 async def set_oauth_handshake_in_session(*, session_id: UUID, state: str, code_verifier: str, ttl_seconds: int) -> SessionData:
-    """Set OAuth handshake values into existing session data."""
+    """Store OAuth state + PKCE verifier in an existing session."""
     current = cast("SessionData | None", await backend.read(session_id))
     if current is None:
-        err_msg = f"cannot set OAuth handshake: session {session_id} not found"
-        raise KeyError(err_msg)
+        msg = f"cannot set OAuth handshake: session {session_id} not found"
+        raise KeyError(msg)
 
-    updated = current.with_oauth_handshake(
-        state=state,
-        code_verifier=code_verifier,
-        ttl_seconds=ttl_seconds,
-    )
-    await backend.create(session_id, updated)
+    updated = current.with_oauth_handshake(state=state, code_verifier=code_verifier, ttl_seconds=ttl_seconds)
+    await backend.update(session_id, updated)
     return updated
 
 
 async def consume_oauth_handshake_from_session(*, session_id: UUID, state: str) -> OAuthStateRecord | None:
-    """Consume OAuth handshake values from session if valid."""
+    """Validate + consume OAuth handshake from session."""
     current = cast("SessionData | None", await backend.read(session_id))
     if current is None:
         return None
 
     record = current.get_oauth_handshake(state=state)
-    await backend.create(session_id, current.clear_oauth_handshake())
+    await backend.update(session_id, current.clear_oauth_handshake())
     return record
 
 
@@ -264,23 +290,19 @@ async def set_oauth_tokens_in_session(
     expires_at: datetime,
     refresh_token: str | None = None,
 ) -> SessionData:
-    """Set OAuth tokens in session data."""
+    """Store OAuth tokens in an existing session."""
     current = cast("SessionData | None", await backend.read(session_id))
     if current is None:
-        err_msg = f"cannot set OAuth tokens: session {session_id} not found"
-        raise KeyError(err_msg)
+        msg = f"cannot set OAuth tokens: session {session_id} not found"
+        raise KeyError(msg)
 
-    updated = current.with_oauth_tokens(
-        access_token=access_token,
-        expires_at=expires_at,
-        refresh_token=refresh_token,
-    )
-    await backend.create(session_id, updated)
+    updated = current.with_oauth_tokens(access_token=access_token, expires_at=expires_at, refresh_token=refresh_token)
+    await backend.update(session_id, updated)
     return updated
 
 
 async def get_oauth_tokens_from_session(*, session_id: UUID) -> OAuthTokenRecord | None:
-    """Read OAuth token record from session data."""
+    """Read non-expired OAuth tokens from a session."""
     current = cast("SessionData | None", await backend.read(session_id))
     if current is None:
         return None
@@ -288,11 +310,11 @@ async def get_oauth_tokens_from_session(*, session_id: UUID) -> OAuthTokenRecord
 
 
 async def clear_oauth_tokens_in_session(*, session_id: UUID) -> SessionData | None:
-    """Clear OAuth token fields from session data."""
+    """Clear OAuth token fields from a session."""
     current = cast("SessionData | None", await backend.read(session_id))
     if current is None:
         return None
 
     updated = current.clear_oauth_tokens()
-    await backend.create(session_id, updated)
+    await backend.update(session_id, updated)
     return updated

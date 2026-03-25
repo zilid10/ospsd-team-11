@@ -463,6 +463,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastapi-sessions" },
     { name = "google-calendar-client-impl" },
+    { name = "httpx" },
+    { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
 
@@ -472,6 +474,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "fastapi-sessions", specifier = ">=0.3.2" },
     { name = "google-calendar-client-impl", editable = "components/google_calendar_client_impl" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "uvicorn", specifier = ">=0.42.0" },
 ]
 
