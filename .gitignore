@@ -35,5 +35,8 @@ credentials.json
 .env.*.local
 *.env
 
+# coverage reports
+htmlcov/
+
 .coverage*
 TESTING_STATUS.md

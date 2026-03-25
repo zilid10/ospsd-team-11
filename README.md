@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This project implements a Calendar Client. The interface defines a contract for calendar operations (creating, reading, updating, and deleting events), while the concrete implementation targets Google Calendar via its API.
+This project implements a Calendar Client. The interface defines a contract for calendar operations (creating, reading, updating, and deleting events), while the concrete implementation targets Google Calendar via its API, and an initial FastAPI service layer that exposes calendar functionality over HTTP.
 
 
 ## Architecture

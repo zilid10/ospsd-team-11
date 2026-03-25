@@ -1,0 +1,14 @@
+[project]
+name = "google-calendar-service"
+version = "0.1.0"
+description = "FastAPI service for Google Calendar client"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.1",
+    "uvicorn>=0.42.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
