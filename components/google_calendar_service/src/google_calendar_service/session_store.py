@@ -164,15 +164,25 @@ def generate_pkce_pair(verifier_bytes: int = 64) -> tuple[str, str]:
     return code_verifier, code_challenge
 
 
-service_settings = get_settings()
+_service_settings = get_settings()
 cookie = SessionCookie(
-    cookie_name=service_settings.session.cookie_name,
-    identifier=service_settings.session.identifier,
+    cookie_name=_service_settings.session.cookie_name,
+    identifier=_service_settings.session.identifier,
     auto_error=True,
-    secret_key=service_settings.session.secret,
+    secret_key=_service_settings.session.secret,
     cookie_params=CookieParameters(
-        secure=service_settings.session.cookie_secure,
-        httponly=service_settings.session.cookie_secure,
+        secure=_service_settings.session.cookie_secure,
+        httponly=_service_settings.session.cookie_secure,
+    ),
+)
+optional_cookie = SessionCookie(
+    cookie_name=_service_settings.session.cookie_name,
+    identifier=_service_settings.session.identifier,
+    auto_error=False,
+    secret_key=_service_settings.session.secret,
+    cookie_params=CookieParameters(
+        secure=_service_settings.session.cookie_secure,
+        httponly=_service_settings.session.cookie_secure,
     ),
 )
 
@@ -217,13 +227,12 @@ class BasicSessionVerifier(SessionVerifier[UUID, SessionData]):  # type: ignore[
         return self._auth_http_exception
 
     def verify_session(self, model: SessionData) -> bool:
-        """Treat existing session payload as valid."""
-        assert model
-        return True
+        """Return whether the session payload exists."""
+        return model is not None
 
 
 verifier = BasicSessionVerifier(
-    identifier="google_calendar_service_verifier",
+    identifier=_service_settings.session.identifier,
     auto_error=True,
     backend=backend,
     auth_http_exception=HTTPException(status_code=403, detail="invalid session"),
