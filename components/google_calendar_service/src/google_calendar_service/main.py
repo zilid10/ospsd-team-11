@@ -8,11 +8,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID  # noqa: TC003 - required at runtime for FastAPI/Pydantic annotation resolution
 
-import google_calendar_client_impl  # noqa: F401 Registers the concrete client via Dependency Injection
 import httpx
-from calendar_client_api import get_client
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
+from fastapi_sessions.frontends.session_frontend import FrontendError  # type: ignore[import-untyped]
+from google_calendar_client_impl import CredentialsToken, GoogleCalendarClient, get_calendar_client_with_credentials
 
 from google_calendar_service.models import (
     EventCreateRequest,
@@ -23,6 +23,7 @@ from google_calendar_service.models import (
     to_event_response,
 )
 from google_calendar_service.session_store import (
+    SessionData,
     clear_oauth_tokens_in_session,
     consume_oauth_handshake_from_session,
     cookie,
@@ -30,8 +31,10 @@ from google_calendar_service.session_store import (
     delete_session,
     generate_oauth_state,
     generate_pkce_pair,
+    optional_cookie,
     set_oauth_handshake_in_session,
     set_oauth_tokens_in_session,
+    verifier,
 )
 from google_calendar_service.settings import get_settings
 
@@ -136,6 +139,31 @@ def _exchange_code_for_tokens(*, code: str, code_verifier: str) -> tuple[str, st
     return access_token, refresh_token_value, expires_at
 
 
+def get_client(
+    _session_id: Annotated[UUID, Depends(cookie)],
+    session_data: Annotated[SessionData, Depends(verifier)],
+) -> GoogleCalendarClient:
+    """Get a GoogleCalendarClient instance with tokens from the current session."""
+    tokens = session_data.get_oauth_tokens()
+    if tokens is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No valid OAuth tokens found in session",
+        )
+
+    services_settings = get_settings()
+    creds_token = CredentialsToken(
+        client_id=services_settings.oauth.require_client_id(),
+        client_secret=services_settings.oauth.require_client_secret(),
+        token_uri=services_settings.oauth.token_url,
+        scopes=services_settings.oauth.scopes.split(),
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+    )
+
+    return get_calendar_client_with_credentials(creds_token=creds_token)
+
+
 @app.get("/health")
 def health() -> StatusResponse:
     """Return service health status."""
@@ -143,9 +171,9 @@ def health() -> StatusResponse:
 
 
 @app.get("/auth/login")
-async def login(previous_session_id: Annotated[UUID, Depends(cookie)]) -> RedirectResponse:
+async def login(previous_session_id: Annotated[UUID | FrontendError, Depends(optional_cookie)]) -> RedirectResponse:
     """Start OAuth login flow and redirect to Google consent screen."""
-    if previous_session_id is not None:
+    if not isinstance(previous_session_id, FrontendError):
         await delete_session(session_id=previous_session_id)
 
     session_id = await create_session()
@@ -225,40 +253,39 @@ async def callback(
 
 
 @app.get("/events")
-def list_events(max_results: Annotated[int, Query(ge=1)] = 10) -> EventsEnvelope:
+def list_events(
+    client: Annotated[GoogleCalendarClient, Depends(get_client)], max_results: Annotated[int, Query(ge=1)] = 10
+) -> EventsEnvelope:
     """List calendar events."""
-    client = get_client()
     events = client.list_events(max_results=max_results)
     return EventsEnvelope(events=[to_event_response(event) for event in events])
 
 
 @app.get("/events/{event_id}")
-def get_event(event_id: str) -> EventEnvelope:
+def get_event(client: Annotated[GoogleCalendarClient, Depends(get_client)], event_id: str) -> EventEnvelope:
     """Get a single calendar event by ID."""
-    client = get_client()
     event = client.get_event(event_id)
     return EventEnvelope(event=to_event_response(event))
 
 
 @app.post("/events")
-def create_event(event: EventCreateRequest) -> EventEnvelope:
+def create_event(client: Annotated[GoogleCalendarClient, Depends(get_client)], event: EventCreateRequest) -> EventEnvelope:
     """Create a calendar event."""
-    client = get_client()
     created_event = client.create_event(event.to_event_create())
     return EventEnvelope(event=to_event_response(created_event))
 
 
 @app.patch("/events/{event_id}")
-def update_event(event_id: str, event: EventUpdateRequest) -> EventEnvelope:
+def update_event(
+    client: Annotated[GoogleCalendarClient, Depends(get_client)], event_id: str, event: EventUpdateRequest
+) -> EventEnvelope:
     """Update a calendar event."""
-    client = get_client()
     updated_event = client.update_event(event_id, event.to_event_update())
     return EventEnvelope(event=to_event_response(updated_event))
 
 
 @app.delete("/events/{event_id}")
-def delete_event(event_id: str) -> StatusResponse:
+def delete_event(client: Annotated[GoogleCalendarClient, Depends(get_client)], event_id: str) -> StatusResponse:
     """Delete a calendar event."""
-    client = get_client()
     client.delete_event(event_id)
     return StatusResponse(status="deleted")

@@ -3,6 +3,7 @@
 import logging
 import os
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
@@ -28,14 +29,26 @@ class GoogleCalendarClient(CalendarClient):
         "https://www.googleapis.com/auth/calendar",
     ]
 
-    def __init__(self, service: Resource | None = None, *, interactive: bool = True) -> None:
+    def __init__(
+        self,
+        service: Resource | None = None,
+        *,
+        creds: Credentials | None = None,
+        interactive: bool = True,
+    ) -> None:
         """Initialize the Google calendar client."""
-        self._default_calendar_id = os.getenv("DEFAULT_CALENDAR_ID", "primary")
+        self._default_calendar_id: str = os.getenv("DEFAULT_CALENDAR_ID", "primary")
         self.logger = logging.getLogger(__name__)
         if service is not None:
             self.service = service
             return
+        if creds is not None:
+            self.service = build("calendar", "v3", credentials=creds)
+            return
+        creds = self._resolve_credentials(interactive=interactive)
+        self.service = build("calendar", "v3", credentials=creds)
 
+    def _resolve_credentials(self, *, interactive: bool) -> Credentials:
         creds_path = self.CREDENTIALS_PATH
         token_path = self.TOKEN_PATH
 
@@ -58,7 +71,7 @@ class GoogleCalendarClient(CalendarClient):
             with Path(token_path).open("w", encoding="utf-8") as file:
                 file.write(creds.to_json())  # type: ignore[no-untyped-call] # google-auth Credentials.to_json() is untyped
 
-        self.service = build("calendar", "v3", credentials=creds)
+        return creds
 
     def _auth_from_env(self) -> Credentials | None:
         client_id = os.environ.get("GOOGLE_CALENDAR_CLIENT_ID")
@@ -309,3 +322,30 @@ def get_google_calendar_client() -> GoogleCalendarClient:
 def register_google_calendar_client() -> None:
     """Register a Google Calendar client."""
     calendar_client_api.register_client(get_google_calendar_client)
+
+
+@dataclass(frozen=True)
+class CredentialsToken:
+    """Structured representation of OAuth credentials for token-based auth."""
+
+    client_id: str
+    client_secret: str
+    token_uri: str
+    scopes: list[str]
+    access_token: str
+    refresh_token: str | None = None
+
+
+def get_calendar_client_with_credentials(creds_token: CredentialsToken) -> GoogleCalendarClient:
+    """Get a Google Calendar client using provided credentials token."""
+    creds = Credentials(  # type: ignore[no-untyped-call] # google-auth Credentials.__init__() is untyped
+        token=creds_token.access_token,
+        refresh_token=creds_token.refresh_token,
+        token_uri=creds_token.token_uri,
+        client_id=creds_token.client_id,
+        client_secret=creds_token.client_secret,
+        scopes=creds_token.scopes,
+    )
+    if creds_token.refresh_token is not None:
+        creds.refresh(Request())
+    return GoogleCalendarClient(creds=creds, interactive=False)
