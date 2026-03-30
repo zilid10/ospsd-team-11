@@ -67,7 +67,10 @@ def _reset_registry() -> Iterator[None]:
 def registered_client() -> GoogleCalendarClient:
     """Register the real Google Calendar client and return it via get_client()."""
     register_google_calendar_client()
-    client = get_client()
+    try:
+        client = get_client()
+    except RuntimeError as exc:
+        pytest.skip(f"Skipping e2e test: local Google credentials unavailable ({exc})")
     assert isinstance(client, GoogleCalendarClient)
     return client
 
@@ -91,7 +94,10 @@ def test_client_creation_via_registry() -> None:
 
     assert _ClientRegistry._factory is not None, "Factory must be registered after call."
 
-    client = get_client()
+    try:
+        client = get_client()
+    except RuntimeError as exc:
+        pytest.skip(f"Skipping e2e test: local Google credentials unavailable ({exc})")
 
     assert isinstance(client, GoogleCalendarClient), f"get_client() must return a GoogleCalendarClient, got {type(client)}"
     assert isinstance(client, CalendarClient), "GoogleCalendarClient must satisfy the CalendarClient ABC."
@@ -199,7 +205,10 @@ def test_full_crud_lifecycle() -> None:
     """Complete workflow: client creation -> create -> get -> list -> update -> delete."""
     # 1. Client creation via DI registry
     register_google_calendar_client()
-    client = get_client()
+    try:
+        client = get_client()
+    except RuntimeError as exc:
+        pytest.skip(f"Skipping e2e test: local Google credentials unavailable ({exc})")
 
     assert isinstance(client, CalendarClient)
     assert isinstance(client, GoogleCalendarClient)

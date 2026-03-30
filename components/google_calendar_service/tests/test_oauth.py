@@ -13,7 +13,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from google_calendar_service.main import app
-from google_calendar_service.session_store import OAuthStateRecord
+from google_calendar_service.session_store import OAuthStateRecord, optional_cookie
 from google_calendar_service.session_store import cookie as session_cookie
 
 HTTP_OK = 200
@@ -24,6 +24,12 @@ HTTP_BAD_GATEWAY = 502
 OAUTH_STATE_TTL_SECONDS = 900
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache() -> None:
+    """Clear cached settings so env monkeypatching is applied per test."""
+    settings_module.get_settings.cache_clear()
 
 
 class TestAuthHelperFunctions:
@@ -258,7 +264,7 @@ class TestAuthEndpoints:
             observed["set_code_verifier"] = code_verifier
             observed["set_ttl"] = ttl_seconds
 
-        app.dependency_overrides[session_cookie] = lambda: previous_session_id
+        app.dependency_overrides[optional_cookie] = lambda: previous_session_id
         monkeypatch.setattr(main_module, "delete_session", fake_delete_session)
         monkeypatch.setattr(main_module, "create_session", fake_create_session)
         monkeypatch.setattr(main_module, "generate_oauth_state", lambda: "state-1")
@@ -278,7 +284,7 @@ class TestAuthEndpoints:
         try:
             response = client.get("/auth/login", follow_redirects=False)
         finally:
-            app.dependency_overrides.pop(session_cookie, None)
+            app.dependency_overrides.pop(optional_cookie, None)
 
         assert response.status_code == HTTP_FOUND
         assert response.headers["location"] == "https://example.com/oauth?state=state-1&cc=challenge-1"
